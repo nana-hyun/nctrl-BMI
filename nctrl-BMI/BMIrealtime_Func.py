@@ -16,11 +16,12 @@ from spiketag.analysis import decoder
 from spiketag.base import probe
 
 import serial
-from tuning import Tuning
 from scipy.ndimage import gaussian_filter1d
 
 class BMIRealtime:
-    def __init__(self, prb, fetfile, ttlport):
+    def __init__(self, prb_path, fetfile, ttlport):
+        prb = probe()
+        prb.load(prb_path)
         self.bmi = BMI(prb=prb, fetfile=fetfile, ttlport=ttlport)
     
     def plot_raster(self, target_neuron_id, bmi_output, window_duration, spike_times):
