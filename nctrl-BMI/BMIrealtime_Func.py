@@ -23,45 +23,66 @@ class BMIRealtime:
         prb = probe()
         prb.load(prb_path)
         self.bmi = BMI(prb=prb, fetfile=fetfile, ttlport=ttlport)
-    
-    def plot_raster(self, target_neuron_id, bmi_output, window_duration, spike_times):
+        self.spike_times_dict = {}
+        self.colors = plt.cm.get_cmap('tab10', 10)  # change the number if you need
+        self.last_signal_time = 0
+        self.laser_duration = 1 # sec
+
+    def plot_raster(self, bmi_output, window_duration, updateFlag):
         t = bmi_output.timestamp  # time
         spk_id = bmi_output.spk_id
-        rm_t = t % 1000
+        rm_t = t % window_duration
 
-        if spk_id == target_neuron_id:
-            if len(spike_times) != 0:
-                if spike_times[-1] > rm_t:
-                    plt.close()
-                    spike_times.clear()
-            spike_times.append(rm_t)
+        if spk_id not in self.spike_times_dict:
+            self.spike_times_dict[spk_id] = []
+
+        if updateFlag == 1:
+            plt.close()
+            for neuron_id in self.spike_times_dict:
+                self.spike_times_dict[neuron_id].clear()
+
+        self.spike_times_dict[spk_id].append(rm_t)
 
         clear_output(wait=True)
-        plt.eventplot(spike_times, orientation='horizontal', linelengths=0.8)
-        plt.xlim(0, 1000)
-        plt.xlabel('Time (s)')
-        plt.title('Real-time Raster Plot for Neuron {}'.format(target_neuron_id))
-        plt.show()
-        time.sleep(0.1)
-        return spike_times
+        plt.figure(figsize=(10, 8))
 
+        all_spike_times = [self.spike_times_dict[neuron_id] for neuron_id in sorted(self.spike_times_dict.keys())]
+        color_list = [self.colors(i % 10) for i in range(len(all_spike_times))]
+
+        plt.eventplot(all_spike_times, orientation='horizontal', linelengths=0.8, colors=color_list)
+        plt.xlim(0, window_duration)
+        plt.xlabel('Time (ms)')
+        plt.title('Real-time Raster Plot for Neuron units')
+        plt.show()
+#         time.sleep(0.1)
+        
+        
     def send_signal_to_teensy(self):
         if self.bmi.TTLserial is not None:
             self.bmi.TTLserial.write(b'a')
             self.bmi.TTLserial.flush()
+            self.last_signal_time = time.time()
 
     def reset_signal_to_teensy(self):
         if self.bmi.TTLserial is not None:
-            self.bmi.TTLserial.write(b'b')
-            self.bmi.TTLserial.flush()
+            current_time = time.time()
+            if current_time - self.last_signal_time >= self.laser_duration:
+                self.bmi.TTLserial.write(b'b')
+                self.bmi.TTLserial.flush()
     
     def bmi_func(self, mode, targetID, neuron_id, threshold, window_duration):
-        spike_times = []
+        start_time = 0
         while True:
+            updateFlag = 0
             frFlag = 0
             spkFlag = 0
             bmi_output = self.bmi.read_bmi()
-            spike_times = self.plot_raster(targetID, bmi_output, window_duration, spike_times)
+            # for plot_raster
+            if bmi_output.timestamp - start_time > window_duration:
+                updateFlag = 1
+                start_time = bmi_output.timestamp
+            
+            self.plot_raster(bmi_output, window_duration,updateFlag)
             
             if mode != "spike ID":
                 self.bmi.binner.input(bmi_output)
@@ -80,13 +101,15 @@ class BMIRealtime:
                 self.reset_signal_to_teensy()
 
     def start_bmi_realtime(self, bsize, Bbins, neuron_id, threshold, t_smooth,
-                           bmi_update_rule, posterior_threshold, two_steps_decoding, mode, targetID, window_duration):
+                           bmi_update_rule, posterior_threshold, two_steps_decoding, mode, targetID, window_duration, laser_duration):
         pos_buffer_len = int(float(t_smooth) / float(bsize))
         self.bmi.bmi_update_rule = bmi_update_rule
         self.bmi.posterior_threshold = posterior_threshold
         self.bmi.pos_buffer_len = pos_buffer_len
         self.bmi.two_steps = two_steps_decoding
+        self.laser_duration = laser_duration
         BMI.set_binner(self.bmi, bin_size=bsize, B_bins=Bbins)
+        
 
         if self.bmi.binner is not None:
             try:
