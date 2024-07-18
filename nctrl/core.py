@@ -64,7 +64,9 @@ class NCtrl:
         # bmi.binner is an eventemitter that will run this function when a new bin is ready
         @self.bmi.binner.connect
         def on_decode(X):
+            tprint(X)
             y = self.dec.predict(X)
+            tprint(y)
             self.output(y)
     
     def set_output(self, output_type='laser', output_port='/dev/ttyACM0'):
