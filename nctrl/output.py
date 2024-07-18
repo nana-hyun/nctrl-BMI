@@ -15,6 +15,7 @@ class Laser:
     def __call__(self, y):
         if self.enable:
             if isinstance(y, int) and y == 1:
+                tprint('laser on! write 1 to teensy')
                 self.ser.write(b'1')
             elif isinstance(y, np.ndarray) and y[0].dtype == np.bool_:
                 y_uint16 = np.packbits(y[0].astype(np.uint8)).view(np.uint16)
