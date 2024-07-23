@@ -22,7 +22,7 @@
 #define safe_clear6_10bit(n) (n & 0xf030ffff)// 1111 0000 0011 0000 1111 1111 1111 1111 in binary
 #define safe_clear6_12bit(n) (n & 0xf030fff3)// 1111 0000 0011 0000 1111 1111 1111 0011 in binary
 #define safe_clear7_4bit(n)  (n & 0xfffffff0)// 1111 1111 1111 1111 1111 1111 1111 0000 in binary
-#define safe_clear7_8bit(n)  (n & 0xfffcf3f0)// 1111 1111 1111 1100 1111 0011 1111 0000 in binary
+#define safe_clear7_8bit(n)  (n & 0xfffcf3f0)// 1111 1111 1111 1100 1111 0011 1111 0000 in binary/home/nclab/Dropbox/src/project-bmi/nctrl-bmi/teensy/teensy.ino
 #define safe_clear9_4bit(n)  (n & 0xfffffe8f)// 1111 1111 1111 1111 1111 1110 1000 1111 in binary 
 
 // laser timer
@@ -36,7 +36,7 @@ unsigned long intervalTime = 0;
 // spike timer
 unsigned long spikeTimers = 0;
 const unsigned long SPIKE_DURATION = 500;
-int pulseStates = 0;
+int spikeStates = 0;
 
 enum LaserState {
     STANDBY,
@@ -46,16 +46,17 @@ enum LaserState {
 };
 
 LaserState state = STANDBY;
+int enable = 0;
 
-#define enableOn() digitalWriteFast(2, HIGH);
-#define enableOff() digitalWriteFast(2, LOW);
+#define enableOn() { digitalWriteFast(2, HIGH); enable = 1; }
+#define enableOff() { digitalWriteFast(2, LOW); enable = 0; }
 #define laserOn() {digitalWriteFast(3, HIGH); digitalWriteFast(4, HIGH);}
 #define laserOff() {digitalWriteFast(3, LOW); digitalWriteFast(4, LOW);}
 
 
 void setup() {
     Serial.begin(115200);
-    set_24bit(OUTPUT);
+    set_16bit(OUTPUT);
     pinMode(2, OUTPUT);
     pinMode(3, OUTPUT);
     pinMode(4, OUTPUT);
@@ -85,9 +86,11 @@ void handleCommand(char cmd) {
             break;
         case 'e': // enable laser
             enableOn();
+            Serial.println("Laser enabled");
             break;
         case 'E': // disable laser
             enableOff();
+            Serial.println("Laser disabled");
             break;
         case 'c': // constantly on
             laserOn();
@@ -107,13 +110,15 @@ void handleCommand(char cmd) {
 }
 
 void startLaser() {
-    if (state == STANDBY) {
-        state = LASERON;
-        startTime = now;
-        intervalTime = now;
-        laserOn();
-    } else {
-        startTime = now; // just make it longer
+    if (enable == 1){
+      if (state == STANDBY) {
+          state = LASERON;
+          startTime = now;
+          intervalTime = now;
+          laserOn();
+      } else {
+          startTime = now; // just make it longer
+      }
     }
 }
 
@@ -123,7 +128,7 @@ void abortLaser() {
 }
 
 void setLaserDuration() {
-    int duration = Serial.parseInt(); // read in ms
+    int duration = Serial.parseInt(); // read in ms ## this can be very slow (~1s)!!!
     finishDuration = duration * 1000; // write in us
     Serial.println("Laser duration is set to " + String(duration));
 }
@@ -154,7 +159,7 @@ void checkLaser() {
 
 void readSpike() {
     uint16_t data = Serial.read() | (Serial.read() << 8);
-    safe_write_24bit(data);
+    safe_write_16bit(data);
     spikeTimers = now;
     spikeStates = 1;
 }
@@ -162,7 +167,7 @@ void readSpike() {
 void checkSpike() {
     if (spikeStates == 1 && now - spikeTimers >= SPIKE_DURATION) {
         spikeStates = 0;
-        safe_write_24bit(0);
+        safe_write_16bit(0);
     }
 }
 
